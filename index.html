@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <title>Corte de Caja Pro</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <div class="app-container" id="reporteCaja">
+        
+        <header class="app-header">
+            <h1>Corte de Caja</h1>
+            <input type="date" id="fechaCorteInput" class="hidden-date-input">
+            <h2 id="fechaCorteDisplay" onclick="document.getElementById('fechaCorteInput').showPicker()">Domingo 17 de Mayo del 2026</h2>
+        </header>
+
+        <main>
+            <section class="card">
+                <div class="card-header">Control de Kilometraje</div>
+                <div class="input-group">
+                    <label>KM Salida</label>
+                    <input type="number" id="kmSalida" placeholder="0">
+                </div>
+                <div class="input-group">
+                    <label>KM Llegada</label>
+                    <input type="number" id="kmLlegada" placeholder="0">
+                </div>
+                <div class="result-row bg-yellow">
+                    <span>Recorrido Total</span>
+                    <span id="kmRecorridos" class="bold-value">0 km</span>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-header">Gasto de Combustible</div>
+                <div class="input-group">
+                    <label>Precio por Litro ($)</label>
+                    <input type="number" step="0.01" id="precioLitro" value="23.99">
+                </div>
+                <div class="input-group">
+                    <label>Carga ($) + $10 Automáticos</label>
+                    <input type="number" id="cargaPesos" placeholder="0">
+                </div>
+                <div class="result-row bg-orange">
+                    <span>Gasolina a Descontar</span>
+                    <span id="gasTotal" class="bold-value">$0.00</span>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-header">Ingresos (Viajes)</div>
+                <div id="contenedorViajes">
+                    </div>
+                <button id="btnAgregarViaje" class="btn-secondary">+ Agregar Viaje</button>
+                <div class="result-row bg-light-green mt-1">
+                    <span>Total Generado</span>
+                    <span id="totalGenerado" class="bold-value">$0.00</span>
+                </div>
+            </section>
+
+            <section class="totals-section">
+                <div class="net-profit">
+                    <small>Ganancia Neta</small>
+                    <div id="gananciaNeta" class="money-huge">$0.00</div>
+                </div>
+                <div class="split-profit">
+                    <small>División 50/50 (Operador / Empresa)</small>
+                    <div id="gananciaDividida" class="money-large">$0.00 c/u</div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="app-actions">
+            <button id="btnNuevoDia" class="btn-primary btn-blue">☀️ Nuevo Día</button>
+            <button id="btnCompartirImg" class="btn-primary btn-purple">📸 Compartir Imagen</button>
+            <button id="btnExportarPDF" class="btn-primary btn-green">📄 Exportar PDF</button>
+        </footer>
+    </div>
+</body>
+</html>
