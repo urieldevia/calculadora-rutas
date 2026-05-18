@@ -1,4 +1,4 @@
-const CACHE_NAME = 'corte-caja-v1';
+const CACHE_NAME = 'corte-caja-v2';
 const urlsToCache = [
   './',
   './index.html',

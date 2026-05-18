@@ -1,27 +1,20 @@
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
-      .then(() => console.log('PWA Offline Activa'))
+      .then(() => console.log('Sistema offline preparado.'))
       .catch(err => console.error('Error PWA:', err));
 }
 
-
-// ==========================================
-// 1. ESTADO DE LA APLICACIÓN (MEMORIA)
-// ==========================================
-// Creamos un objeto que guardará todos nuestros datos.
 let appData = {
-    fecha: new Date().toISOString().split('T')[0], // ej: "2026-05-17"
+    fecha: new Date().toISOString().split('T')[0],
     kmSalida: '',
     kmLlegada: '',
     precioLitro: 23.99,
     cargaPesos: '',
-    viajes: [''] // Empezamos con 1 viaje vacío
+    viajes: ['']
 };
 
-// ==========================================
-// 2. REFERENCIAS AL DOM (El HTML)
-// ==========================================
-// Capturamos los elementos del HTML para manipularlos con JS
+let historialCortes = [];
+
 const inputs = {
     fecha: document.getElementById('fechaCorteInput'),
     fechaDisplay: document.getElementById('fechaCorteDisplay'),
@@ -40,34 +33,29 @@ const displays = {
 };
 
 const contenedorViajes = document.getElementById('contenedorViajes');
+const listaHistorialContenedor = document.getElementById('listaHistorial');
 
-// ==========================================
-// 3. INICIALIZACIÓN Y LOCALSTORAGE
-// ==========================================
-// Esta función arranca cuando la página carga
 function iniciarApp() {
-    cargarDatosGuardados();
-    renderizarViajes();
-    asignarEventos();
-    calcularTotales();
-    formatearFechaLarga();
+    cargarEstructuraPersistente();
+    renderizarSeccionViajes();
+    renderizarHistorialVisual();
+    enlazarEventosInteractivos();
+    calcularResultadosFinancieros(false);
+    actualizarFechaLargaFormato();
 }
 
-// LocalStorage es la base de datos del navegador. 
-// JSON.stringify convierte nuestro objeto a texto para guardarlo.
-// JSON.parse lo convierte de texto a objeto otra vez.
-function guardarDatos() {
-    localStorage.setItem('corteCajaPro', JSON.stringify(appData));
+function guardarPersistencia() {
+    localStorage.setItem('corteCajaPro_Activo', JSON.stringify(appData));
+    localStorage.setItem('corteCajaPro_Historial', JSON.stringify(historialCortes));
 }
 
-function cargarDatosGuardados() {
-    const datosGuardados = localStorage.getItem('corteCajaPro');
-    if (datosGuardados) {
-        // Si hay datos guardados, sobrescribimos appData
-        appData = JSON.parse(datosGuardados);
-    }
+function cargarEstructuraPersistente() {
+    const activoGuardado = localStorage.getItem('corteCajaPro_Activo');
+    const historialGuardado = localStorage.getItem('corteCajaPro_Historial');
     
-    // Pasamos los datos de memoria a los inputs visuales
+    if (activoGuardado) appData = JSON.parse(activoGuardado);
+    if (historialGuardado) historialCortes = JSON.parse(historialGuardado);
+    
     inputs.fecha.value = appData.fecha;
     inputs.kmS.value = appData.kmSalida;
     inputs.kmL.value = appData.kmLlegada;
@@ -75,159 +63,238 @@ function cargarDatosGuardados() {
     inputs.cargaP.value = appData.cargaPesos;
 }
 
-// ==========================================
-// 4. LÓGICA DE CÁLCULOS
-// ==========================================
-function calcularTotales() {
-    // 1. KM
-    let sal = parseFloat(inputs.kmS.value) || 0; // || 0 significa "si está vacío o es NaN, usa 0"
-    let lleg = parseFloat(inputs.kmL.value) || 0;
-    let recorridos = Math.max(0, lleg - sal); // Evita números negativos
-    displays.kmTotales.textContent = `${recorridos} km`;
+function sincronizarConHistorial() {
+    const indiceExistente = historialCortes.findIndex(item => item.fecha === appData.fecha);
+    const copiaCorte = JSON.parse(JSON.stringify(appData));
+    
+    if (indiceExistente !== -1) {
+        historialCortes[indiceExistente] = copiaCorte;
+    } else {
+        historialCortes.push(copiaCorte);
+    }
+    
+    historialCortes.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    guardarPersistencia();
+    renderizarHistorialVisual();
+}
 
-    // 2. Gasolina (Regla de negocio: Sumar $10 fijos siempre)
-    let cargaBase = parseFloat(inputs.cargaP.value) || 0;
-    // ¡IMPORTANTE! Si hay carga base, sumamos 10. Si no hay nada, es 0.
-    let gasTotalReal = cargaBase > 0 ? cargaBase + 10 : 0; 
-    displays.gasTotal.textContent = `$${gasTotalReal.toFixed(2)}`;
+function calcularResultadosFinancieros(debeSincronizarHistorial = true) {
+    let kSal = parseFloat(inputs.kmS.value) || 0;
+    let kLleg = parseFloat(inputs.kmL.value) || 0;
+    let recorridoTotal = Math.max(0, kLleg - kSal);
+    displays.kmTotales.textContent = `${recorridoTotal} km`;
 
-    // 3. Viajes
-    let totalIngresos = 0;
+    let pLitro = parseFloat(inputs.precioL.value) || 0;
+    let cargaFinalCalculada = 0;
+
+    if (inputs.cargaP.value === '') {
+        cargaFinalCalculada = recorridoTotal * pLitro;
+    } else {
+        cargaFinalCalculada = parseFloat(inputs.cargaP.value) || 0;
+    }
+
+    let gasolinaDescontar = cargaFinalCalculada > 0 ? cargaFinalCalculada + 10 : 0;
+    displays.gasTotal.textContent = `$${gasolinaDescontar.toFixed(2)}`;
+
+    let sumaViajes = 0;
     appData.viajes.forEach(monto => {
-        totalIngresos += parseFloat(monto) || 0;
+        sumaViajes += parseFloat(monto) || 0;
     });
-    displays.totalGen.textContent = `$${totalIngresos.toFixed(2)}`;
+    displays.totalGen.textContent = `$${sumaViajes.toFixed(2)}`;
 
-    // 4. Neta y División
-    let neta = totalIngresos - gasTotalReal;
-    displays.neto.textContent = `$${neta.toFixed(2)}`;
-    displays.mitad.textContent = `$${(neta / 2).toFixed(2)} c/u`;
+    let gananciaNetaFinal = sumaViajes - gasolinaDescontar;
+    displays.neto.textContent = `$${gananciaNetaFinal.toFixed(2)}`;
+    displays.mitad.textContent = `$${(gananciaNetaFinal / 2).toFixed(2)} c/u`;
 
-    // Actualizamos la memoria principal y guardamos en LocalStorage
     appData.kmSalida = inputs.kmS.value;
     appData.kmLlegada = inputs.kmL.value;
     appData.precioLitro = inputs.precioL.value;
     appData.cargaPesos = inputs.cargaP.value;
-    guardarDatos();
+    
+    if (debeSincronizarHistorial) {
+        sincronizarConHistorial();
+    } else {
+        guardarPersistencia();
+    }
 }
 
-// ==========================================
-// 5. MANEJO DE VIAJES DINÁMICOS
-// ==========================================
-function renderizarViajes() {
-    contenedorViajes.innerHTML = ''; // Limpiamos la caja
-    
-    appData.viajes.forEach((monto, index) => {
-        const div = document.createElement('div');
-        div.className = 'input-group';
-        div.innerHTML = `
-            <label>Viaje ${index + 1}</label>
-            <input type="number" class="input-viaje" data-index="${index}" value="${monto}" placeholder="0">
+function renderizarSeccionViajes() {
+    contenedorViajes.innerHTML = '';
+    appData.viajes.forEach((monto, idx) => {
+        const fila = document.createElement('div');
+        fila.className = 'input-group';
+        fila.innerHTML = `
+            <label>Viaje ${idx + 1}</label>
+            <input type="number" class="input-viaje-dinamico" data-id="${idx}" value="${monto}" placeholder="0">
         `;
-        contenedorViajes.appendChild(div);
+        contenedorViajes.appendChild(fila);
     });
 
-    // Reasignamos el evento de escuchar a los nuevos inputs
-    document.querySelectorAll('.input-viaje').forEach(input => {
-        input.addEventListener('input', (e) => {
-            let idx = e.target.getAttribute('data-index');
-            appData.viajes[idx] = e.target.value;
-            calcularTotales();
+    document.querySelectorAll('.input-viaje-dinamico').forEach(el => {
+        el.addEventListener('input', (e) => {
+            let indexModificado = e.target.getAttribute('data-id');
+            appData.viajes[indexModificado] = e.target.value;
+            calcularResultadosFinancieros(true);
         });
     });
 }
 
-// ==========================================
-// 6. FECHA LARGA Y EVENTOS
-// ==========================================
-function formatearFechaLarga() {
-    // Usamos la API de Internacionalización de JS para formato profesional
-    const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    // Añadimos 'T12:00:00' para evitar desfases de zona horaria (bugs de 1 día antes)
-    const fechaObj = new Date(appData.fecha + 'T12:00:00');
-    let texto = fechaObj.toLocaleDateString('es-MX', opciones);
+function renderizarHistorialVisual() {
+    listaHistorialContenedor.innerHTML = '';
     
-    // Capitalizamos la primera letra
-    texto = texto.charAt(0).toUpperCase() + texto.slice(1);
-    displays.fechaDisplay.textContent = texto;
-}
+    if (historialCortes.length === 0) {
+        listaHistorialContenedor.innerHTML = `<div class="history-empty">No hay cortes registrados en el historial.</div>`;
+        return;
+    }
+    
+    historialCortes.forEach(corte => {
+        let totalV = corte.viajes.reduce((a, b) => a + (parseFloat(b) || 0), 0);
+        let kSal = parseFloat(corte.kmSalida) || 0;
+        let kLleg = parseFloat(corte.kmLlegada) || 0;
+        let rec = Math.max(0, kLleg - kSal);
+        let cBase = corte.cargaPesos === '' ? (rec * (parseFloat(corte.precioLitro) || 0)) : (parseFloat(corte.cargaPesos) || 0);
+        let gas = cBase > 0 ? cBase + 10 : 0;
+        let neto = totalV - gas;
 
-function asignarEventos() {
-    // Cada vez que un usuario escribe en un input, recalculamos
-    [inputs.kmS, inputs.kmL, inputs.precioL, inputs.cargaP].forEach(input => {
-        input.addEventListener('input', calcularTotales);
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+            <div class="history-info">
+                <span class="history-date">${corte.fecha}</span>
+                <span class="history-amount">Neta: $${neto.toFixed(2)}</span>
+            </div>
+            <div class="history-buttons">
+                <button class="btn-history-action btn-history-load" data-fecha="${corte.fecha}">Editar</button>
+                <button class="btn-history-action btn-history-delete" data-fecha="${corte.fecha}">Borrar</button>
+            </div>
+        `;
+        listaHistorialContenedor.appendChild(item);
     });
 
-    // Evento de cambio de fecha
+    document.querySelectorAll('.btn-history-load').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            reabrirAntecedenteDia(e.target.getAttribute('data-fecha'));
+        });
+    });
+
+    document.querySelectorAll('.btn-history-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            eliminarRegistroHistorial(e.target.getAttribute('data-fecha'));
+        });
+    });
+}
+
+function reabrirAntecedenteDia(fechaSeleccionada) {
+    const registro = historialCortes.find(item => item.fecha === fechaSeleccionada);
+    if (registro) {
+        appData = JSON.parse(JSON.stringify(registro));
+        inputs.fecha.value = appData.fecha;
+        inputs.kmS.value = appData.kmSalida;
+        inputs.kmL.value = appData.kmLlegada;
+        inputs.precioL.value = appData.precioLitro;
+        inputs.cargaP.value = appData.cargaPesos;
+        
+        renderizarSeccionViajes();
+        calcularResultadosFinancieros(false);
+        actualizarFechaLargaFormato();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+function eliminarRegistroHistorial(fechaSeleccionada) {
+    if (confirm(`¿Eliminar permanentemente el corte del día ${fechaSeleccionada}?`)) {
+        historialCortes = historialCortes.filter(item => item.fecha !== fechaSeleccionada);
+        guardarPersistencia();
+        renderizarHistorialVisual();
+        if (appData.fecha === fechaSeleccionada) ejecutarLimpiezaNuevoDia();
+    }
+}
+
+function actualizarFechaLargaFormato() {
+    const configuracionIdioma = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const conversionFecha = new Date(appData.fecha + 'T12:00:00');
+    let textoResultado = conversionFecha.toLocaleDateString('es-MX', configuracionIdioma);
+    textoResultado = textoResultado.replace(/de ([a-z])/g, (match, p1) => 'de ' + p1.toUpperCase());
+    displays.fechaDisplay.textContent = textoResultado.charAt(0).toUpperCase() + textoResultado.slice(1);
+}
+
+function ejecutarLimpiezaNuevoDia() {
+    let ultimoKmLlegada = appData.kmLlegada;
+    appData = {
+        fecha: new Date().toISOString().split('T')[0],
+        kmSalida: ultimoKmLlegada,
+        kmLlegada: '',
+        precioLitro: appData.precioLitro,
+        cargaPesos: '',
+        viajes: ['']
+    };
+    inputs.fecha.value = appData.fecha;
+    inputs.kmS.value = appData.kmSalida;
+    inputs.kmL.value = appData.kmLlegada;
+    inputs.cargaP.value = appData.cargaPesos;
+    
+    renderizarSeccionViajes();
+    calcularResultadosFinancieros(true);
+    actualizarFechaLargaFormato();
+}
+
+function enlazarEventosInteractivos() {
+    [inputs.kmS, inputs.kmL, inputs.precioL, inputs.cargaP].forEach(entrada => {
+        entrada.addEventListener('input', () => calcularResultadosFinancieros(true));
+    });
+
     inputs.fecha.addEventListener('change', (e) => {
         appData.fecha = e.target.value;
-        formatearFechaLarga();
-        guardarDatos();
+        actualizarFechaLargaFormato();
+        const registroExistente = historialCortes.find(item => item.fecha === appData.fecha);
+        if (registroExistente) reabrirAntecedenteDia(appData.fecha);
+        else calcularResultadosFinancieros(true);
     });
 
-    // Agregar viaje
     document.getElementById('btnAgregarViaje').addEventListener('click', () => {
         appData.viajes.push('');
-        renderizarViajes();
-        guardarDatos();
+        renderizarSeccionViajes();
+        calcularResultadosFinancieros(true);
     });
 
-    // ==========================================
-    // 7. BOTÓN NUEVO DÍA
-    // ==========================================
     document.getElementById('btnNuevoDia').addEventListener('click', () => {
-        if(confirm('¿Iniciar un nuevo día? Los datos actuales se borrarán.')) {
-            // El kilometraje de llegada de ayer, es el de salida de hoy
-            let kmLlegadaAyer = appData.kmLlegada;
-            
-            appData = {
-                fecha: new Date().toISOString().split('T')[0], // Fecha de hoy
-                kmSalida: kmLlegadaAyer,
-                kmLlegada: '',
-                precioLitro: appData.precioLitro, // Conservamos el precio de gasolina
-                cargaPesos: '',
-                viajes: ['']
-            };
-            
-            cargarDatosGuardados(); // Resetea visualmente
-            renderizarViajes();
-            calcularTotales();
-            formatearFechaLarga();
-        }
+        if (confirm('¿Iniciar un nuevo día de trabajo?')) ejecutarLimpiezaNuevoDia();
     });
 
-    // Eventos para Exportación (se conectan a las otras librerías)
-    document.getElementById('btnCompartirImg').addEventListener('click', generarImagen);
-    document.getElementById('btnExportarPDF').addEventListener('click', generarPDF);
+    document.getElementById('btnCompartirImg').addEventListener('click', ejecutarProtocoloCompartir);
 }
 
-// INICIAR AL CARGAR
+function ejecutarProtocoloCompartir() {
+    const zonaCaptura = document.getElementById('contenedorReporte');
+    const botonViaje = document.getElementById('btnAgregarViaje');
+    const selectorFechaInput = document.getElementById('fechaCorteInput');
+
+    botonViaje.classList.add('hidden-capture');
+    selectorFechaInput.classList.add('hidden-capture');
+
+    html2canvas(zonaCaptura, { scale: 2, useCORS: true, backgroundColor: "#ffffff" }).then(canvas => {
+        botonViaje.classList.remove('hidden-capture');
+        selectorFechaInput.classList.remove('hidden-capture');
+
+        canvas.toBlob(blob => {
+            if (!blob) return alert("Error al procesar la imagen.");
+            const archivoImagen = new File([blob], `Corte_${appData.fecha}.png`, { type: 'image/png' });
+
+            if (navigator.canShare && navigator.canShare({ files: [archivoImagen] })) {
+                navigator.share({
+                    files: [archivoImagen],
+                    title: 'Reporte de Corte de Caja',
+                    text: `Corte de Caja de la fecha: ${appData.fecha}`
+                }).catch(err => console.log('Compartición cancelada:', err));
+            } else {
+                let enlaceDescarga = document.createElement('a');
+                enlaceDescarga.download = `Corte_${appData.fecha}.png`;
+                enlaceDescarga.href = URL.createObjectURL(blob);
+                enlaceDescarga.click();
+                alert("Imagen descargada. Abre WhatsApp y envíala desde tu galería.");
+            }
+        }, 'image/png');
+    });
+}
+
 window.addEventListener('DOMContentLoaded', iniciarApp);
-
-// ==========================================
-// 8. FUNCIONES DE EXPORTACIÓN (html2canvas y html2pdf)
-// ==========================================
-function generarImagen() {
-    const elemento = document.getElementById('reporteCaja');
-    // html2canvas "toma una foto" del HTML
-    html2canvas(elemento, { scale: 2, useCORS: true }).then(canvas => {
-        // Convertimos el canvas a imagen PNG
-        let enlace = document.createElement('a');
-        enlace.download = `Corte_${appData.fecha}.png`;
-        enlace.href = canvas.toDataURL("image/png");
-        enlace.click(); // Forzamos la descarga
-    });
-}
-
-function generarPDF() {
-    const elemento = document.getElementById('reporteCaja');
-    const opt = {
-        margin:       10,
-        filename:     `Corte_${appData.fecha}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2 },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    // html2pdf procesa el elemento usando la configuración
-    html2pdf().set(opt).from(elemento).save();
-}
