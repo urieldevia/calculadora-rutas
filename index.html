@@ -1,17 +1,18 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
     <title>Corte de Caja Pro</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css">
+    
+    <link rel="manifest" href="manifest.json?v=1.1">
+    <link rel="stylesheet" href="style.css?v=1.1">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js" defer></script>
+    <script src="app.js?v=1.1" defer></script>
 </head>
 <body>
     <div class="app-container">
@@ -58,8 +59,7 @@
 
                 <section class="card">
                     <div class="card-header">Ingresos (Viajes)</div>
-                    <div id="contenedorViajes">
-                        </div>
+                    <div id="contenedorViajes"></div>
                     <button id="btnAgregarViaje" class="btn-secondary">+ Agregar Viaje</button>
                     <div class="result-row bg-light-green mt-1">
                         <span>Total Generado</span>
@@ -79,10 +79,10 @@
                 </section>
             </main>
         </div>
+
         <section class="card history-card">
             <div class="card-header">Historial de Cortes Guardados</div>
-            <div id="listaHistorial" class="history-list">
-                </div>
+            <div id="listaHistorial" class="history-list"></div>
         </section>
 
         <footer class="app-actions">

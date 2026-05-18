@@ -1,27 +1,14 @@
-// ==========================================
-// REGISTRO Y AUTO-ACTUALIZACIÓN DE LA PWA
-// ==========================================
+// FORZAR ACTUALIZACIÓN DEL SERVICE WORKER
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').then(registration => {
-        console.log('Sistema offline preparado.');
-
-        // 1. Fuerza al navegador a buscar actualizaciones cada que abren la app
-        registration.update();
-
-        // 2. Si encuentra que subiste algo nuevo a GitHub, actualiza y recarga solo
-        registration.addEventListener('updatefound', () => {
-            const newWorker = registration.installing;
-            newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    console.log('Nueva versión detectada. Recargando app...');
-                    window.location.reload(); 
-                }
-            });
-        });
-    }).catch(err => console.error('Error PWA:', err));
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+            registration.update();
+        }
+    });
+    navigator.serviceWorker.register('./sw.js?v=1.1')
+      .then(() => console.log('Sistema offline en red.'))
+      .catch(err => console.error('Error PWA:', err));
 }
-
-// ... EL RESTO DE TU CÓDIGO (let appData = ...) SE QUEDA EXACTAMENTE IGUAL ...
 
 let appData = {
     fecha: new Date().toISOString().split('T')[0],
@@ -104,15 +91,18 @@ function calcularResultadosFinancieros(debeSincronizarHistorial = true) {
     displays.kmTotales.textContent = `${recorridoTotal} km`;
 
     let pLitro = parseFloat(inputs.precioL.value) || 0;
-    let cargaFinalCalculada = 0;
+    let gasolinaDescontar = 0;
 
+    // MATEMÁTICA CORREGIDA: ((Recorrido Total / 10) * Precio por Litro) + 10
     if (inputs.cargaP.value === '') {
-        cargaFinalCalculada = recorridoTotal * pLitro;
+        if (recorridoTotal > 0) {
+            gasolinaDescontar = ((recorridoTotal / 10) * pLitro) + 10;
+        }
     } else {
-        cargaFinalCalculada = parseFloat(inputs.cargaP.value) || 0;
+        let cargaManual = parseFloat(inputs.cargaP.value) || 0;
+        if (cargaManual > 0) gasolinaDescontar = cargaManual + 10;
     }
 
-    let gasolinaDescontar = cargaFinalCalculada > 0 ? cargaFinalCalculada + 10 : 0;
     displays.gasTotal.textContent = `$${gasolinaDescontar.toFixed(2)}`;
 
     let sumaViajes = 0;
@@ -130,11 +120,8 @@ function calcularResultadosFinancieros(debeSincronizarHistorial = true) {
     appData.precioLitro = inputs.precioL.value;
     appData.cargaPesos = inputs.cargaP.value;
     
-    if (debeSincronizarHistorial) {
-        sincronizarConHistorial();
-    } else {
-        guardarPersistencia();
-    }
+    if (debeSincronizarHistorial) sincronizarConHistorial();
+    else guardarPersistencia();
 }
 
 function renderizarSeccionViajes() {
@@ -151,8 +138,7 @@ function renderizarSeccionViajes() {
 
     document.querySelectorAll('.input-viaje-dinamico').forEach(el => {
         el.addEventListener('input', (e) => {
-            let indexModificado = e.target.getAttribute('data-id');
-            appData.viajes[indexModificado] = e.target.value;
+            appData.viajes[e.target.getAttribute('data-id')] = e.target.value;
             calcularResultadosFinancieros(true);
         });
     });
@@ -160,7 +146,6 @@ function renderizarSeccionViajes() {
 
 function renderizarHistorialVisual() {
     listaHistorialContenedor.innerHTML = '';
-    
     if (historialCortes.length === 0) {
         listaHistorialContenedor.innerHTML = `<div class="history-empty">No hay cortes registrados en el historial.</div>`;
         return;
@@ -168,11 +153,18 @@ function renderizarHistorialVisual() {
     
     historialCortes.forEach(corte => {
         let totalV = corte.viajes.reduce((a, b) => a + (parseFloat(b) || 0), 0);
-        let kSal = parseFloat(corte.kmSalida) || 0;
-        let kLleg = parseFloat(corte.kmLlegada) || 0;
-        let rec = Math.max(0, kLleg - kSal);
-        let cBase = corte.cargaPesos === '' ? (rec * (parseFloat(corte.precioLitro) || 0)) : (parseFloat(corte.cargaPesos) || 0);
-        let gas = cBase > 0 ? cBase + 10 : 0;
+        let rec = Math.max(0, (parseFloat(corte.kmLlegada) || 0) - (parseFloat(corte.kmSalida) || 0));
+        let pLitro = parseFloat(corte.precioLitro) || 0;
+        
+        // MATEMÁTICA CORREGIDA PARA HISTORIAL
+        let gas = 0;
+        if (corte.cargaPesos === '') {
+            if (rec > 0) gas = ((rec / 10) * pLitro) + 10;
+        } else {
+            let cargaManual = parseFloat(corte.cargaPesos) || 0;
+            if (cargaManual > 0) gas = cargaManual + 10;
+        }
+
         let neto = totalV - gas;
 
         const item = document.createElement('div');
@@ -183,7 +175,7 @@ function renderizarHistorialVisual() {
                 <span class="history-amount">Neta: $${neto.toFixed(2)}</span>
             </div>
             <div class="history-buttons">
-                <button class="btn-history-action btn-history-load" data-fecha="${corte.fecha}">Editar</button>
+                <button class="btn-history-action btn-history-load" data-fecha="${corte.fecha}">Abrir</button>
                 <button class="btn-history-action btn-history-delete" data-fecha="${corte.fecha}">Borrar</button>
             </div>
         `;
@@ -191,15 +183,11 @@ function renderizarHistorialVisual() {
     });
 
     document.querySelectorAll('.btn-history-load').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            reabrirAntecedenteDia(e.target.getAttribute('data-fecha'));
-        });
+        btn.addEventListener('click', e => reabrirAntecedenteDia(e.target.getAttribute('data-fecha')));
     });
 
     document.querySelectorAll('.btn-history-delete').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            eliminarRegistroHistorial(e.target.getAttribute('data-fecha'));
-        });
+        btn.addEventListener('click', e => eliminarRegistroHistorial(e.target.getAttribute('data-fecha')));
     });
 }
 
@@ -230,18 +218,16 @@ function eliminarRegistroHistorial(fechaSeleccionada) {
 }
 
 function actualizarFechaLargaFormato() {
-    const configuracionIdioma = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     const conversionFecha = new Date(appData.fecha + 'T12:00:00');
-    let textoResultado = conversionFecha.toLocaleDateString('es-MX', configuracionIdioma);
-    textoResultado = textoResultado.replace(/de ([a-z])/g, (match, p1) => 'de ' + p1.toUpperCase());
+    let textoResultado = conversionFecha.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    textoResultado = textoResultado.replace(/de ([a-z])/g, (m, p1) => 'de ' + p1.toUpperCase());
     displays.fechaDisplay.textContent = textoResultado.charAt(0).toUpperCase() + textoResultado.slice(1);
 }
 
 function ejecutarLimpiezaNuevoDia() {
-    let ultimoKmLlegada = appData.kmLlegada;
     appData = {
         fecha: new Date().toISOString().split('T')[0],
-        kmSalida: ultimoKmLlegada,
+        kmSalida: appData.kmLlegada, // Pasa el de llegada de ayer al de salida de hoy
         kmLlegada: '',
         precioLitro: appData.precioLitro,
         cargaPesos: '',
@@ -302,7 +288,7 @@ function ejecutarProtocoloCompartir() {
             if (navigator.canShare && navigator.canShare({ files: [archivoImagen] })) {
                 navigator.share({
                     files: [archivoImagen],
-                    title: 'Reporte de Corte de Caja',
+                    title: 'Reporte Asistencia Vial RM',
                     text: `Corte de Caja de la fecha: ${appData.fecha}`
                 }).catch(err => console.log('Compartición cancelada:', err));
             } else {
@@ -310,7 +296,7 @@ function ejecutarProtocoloCompartir() {
                 enlaceDescarga.download = `Corte_${appData.fecha}.png`;
                 enlaceDescarga.href = URL.createObjectURL(blob);
                 enlaceDescarga.click();
-                alert("Imagen descargada. Abre WhatsApp y envíala desde tu galería.");
+                alert("Imagen descargada a tus archivos. Abre WhatsApp para enviarla.");
             }
         }, 'image/png');
     });
