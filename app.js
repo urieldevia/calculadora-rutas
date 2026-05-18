@@ -1,8 +1,27 @@
+// ==========================================
+// REGISTRO Y AUTO-ACTUALIZACIÓN DE LA PWA
+// ==========================================
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js')
-      .then(() => console.log('Sistema offline preparado.'))
-      .catch(err => console.error('Error PWA:', err));
+    navigator.serviceWorker.register('./sw.js').then(registration => {
+        console.log('Sistema offline preparado.');
+
+        // 1. Fuerza al navegador a buscar actualizaciones cada que abren la app
+        registration.update();
+
+        // 2. Si encuentra que subiste algo nuevo a GitHub, actualiza y recarga solo
+        registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('Nueva versión detectada. Recargando app...');
+                    window.location.reload(); 
+                }
+            });
+        });
+    }).catch(err => console.error('Error PWA:', err));
 }
+
+// ... EL RESTO DE TU CÓDIGO (let appData = ...) SE QUEDA EXACTAMENTE IGUAL ...
 
 let appData = {
     fecha: new Date().toISOString().split('T')[0],
