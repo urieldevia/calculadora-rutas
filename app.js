@@ -1,12 +1,11 @@
-// FORZAR ACTUALIZACIÓN DEL SERVICE WORKER
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(registrations) {
         for(let registration of registrations) {
             registration.update();
         }
     });
-    navigator.serviceWorker.register('./sw.js?v=1.1')
-      .then(() => console.log('Sistema offline en red.'))
+    navigator.serviceWorker.register('./sw.js?v=1.2')
+      .then(() => console.log('Sistema de actualización en red activo.'))
       .catch(err => console.error('Error PWA:', err));
 }
 
@@ -15,7 +14,7 @@ let appData = {
     kmSalida: '',
     kmLlegada: '',
     precioLitro: 23.99,
-    cargaPesos: '',
+    cargaLitros: '', // Variable adaptada para almacenar volumen en litros
     viajes: ['']
 };
 
@@ -27,7 +26,7 @@ const inputs = {
     kmS: document.getElementById('kmSalida'),
     kmL: document.getElementById('kmLlegada'),
     precioL: document.getElementById('precioLitro'),
-    cargaP: document.getElementById('cargaPesos')
+    cargaL: document.getElementById('cargaLitros') // Selector actualizado
 };
 
 const displays = {
@@ -66,7 +65,7 @@ function cargarEstructuraPersistente() {
     inputs.kmS.value = appData.kmSalida;
     inputs.kmL.value = appData.kmLlegada;
     inputs.precioL.value = appData.precioLitro;
-    inputs.cargaP.value = appData.cargaPesos;
+    inputs.cargaL.value = appData.cargaLitros;
 }
 
 function sincronizarConHistorial() {
@@ -91,18 +90,20 @@ function calcularResultadosFinancieros(debeSincronizarHistorial = true) {
     displays.kmTotales.textContent = `${recorridoTotal} km`;
 
     let pLitro = parseFloat(inputs.precioL.value) || 0;
-    let gasolinaDescontar = 0;
+    let litros = 0;
 
-    // MATEMÁTICA CORREGIDA: ((Recorrido Total / 10) * Precio por Litro) + 10
-    if (inputs.cargaP.value === '') {
-        if (recorridoTotal > 0) {
-            gasolinaDescontar = ((recorridoTotal / 10) * pLitro) + 10;
-        }
+    // MODIFICACIÓN DE LA OPERACIÓN DE GASOLINA
+    if (inputs.cargaL.value === '') {
+        // Opción automática: muestra el resultado directo de "Recorrido Total / 10" en el marcador visual (placeholder)
+        litros = recorridoTotal / 10;
+        inputs.cargaL.placeholder = litros > 0 ? litros.toFixed(2) : 'Autocalculado';
     } else {
-        let cargaManual = parseFloat(inputs.cargaP.value) || 0;
-        if (cargaManual > 0) gasolinaDescontar = cargaManual + 10;
+        // Opción manual: toma el valor directo de los litros ingresados por el operador
+        litros = parseFloat(inputs.cargaL.value) || 0;
     }
 
+    // Cálculo final para el apartado "$ Gasolina" aplicando: (Precio por Litro * Litros) + 10
+    let gasolinaDescontar = litros > 0 ? (pLitro * litros) + 10 : 0;
     displays.gasTotal.textContent = `$${gasolinaDescontar.toFixed(2)}`;
 
     let sumaViajes = 0;
@@ -118,7 +119,7 @@ function calcularResultadosFinancieros(debeSincronizarHistorial = true) {
     appData.kmSalida = inputs.kmS.value;
     appData.kmLlegada = inputs.kmL.value;
     appData.precioLitro = inputs.precioL.value;
-    appData.cargaPesos = inputs.cargaP.value;
+    appData.cargaLitros = inputs.cargaL.value;
     
     if (debeSincronizarHistorial) sincronizarConHistorial();
     else guardarPersistencia();
@@ -156,15 +157,15 @@ function renderizarHistorialVisual() {
         let rec = Math.max(0, (parseFloat(corte.kmLlegada) || 0) - (parseFloat(corte.kmSalida) || 0));
         let pLitro = parseFloat(corte.precioLitro) || 0;
         
-        // MATEMÁTICA CORREGIDA PARA HISTORIAL
-        let gas = 0;
-        if (corte.cargaPesos === '') {
-            if (rec > 0) gas = ((rec / 10) * pLitro) + 10;
+        let litros = 0;
+        if (corte.cargaLitros === '' || corte.cargaLitros === undefined) {
+            litros = rec / 10;
         } else {
-            let cargaManual = parseFloat(corte.cargaPesos) || 0;
-            if (cargaManual > 0) gas = cargaManual + 10;
+            litros = parseFloat(corte.cargaLitros) || 0;
         }
 
+        // Reflejo matemático de la actualización en el historial
+        let gas = litros > 0 ? (pLitro * litros) + 10 : 0;
         let neto = totalV - gas;
 
         const item = document.createElement('div');
@@ -199,7 +200,7 @@ function reabrirAntecedenteDia(fechaSeleccionada) {
         inputs.kmS.value = appData.kmSalida;
         inputs.kmL.value = appData.kmLlegada;
         inputs.precioL.value = appData.precioLitro;
-        inputs.cargaP.value = appData.cargaPesos;
+        inputs.cargaL.value = appData.cargaLitros || '';
         
         renderizarSeccionViajes();
         calcularResultadosFinancieros(false);
@@ -227,16 +228,16 @@ function actualizarFechaLargaFormato() {
 function ejecutarLimpiezaNuevoDia() {
     appData = {
         fecha: new Date().toISOString().split('T')[0],
-        kmSalida: appData.kmLlegada, // Pasa el de llegada de ayer al de salida de hoy
+        kmSalida: appData.kmLlegada,
         kmLlegada: '',
         precioLitro: appData.precioLitro,
-        cargaPesos: '',
+        cargaLitros: '',
         viajes: ['']
     };
     inputs.fecha.value = appData.fecha;
     inputs.kmS.value = appData.kmSalida;
     inputs.kmL.value = appData.kmLlegada;
-    inputs.cargaP.value = appData.cargaPesos;
+    inputs.cargaL.value = appData.cargaLitros;
     
     renderizarSeccionViajes();
     calcularResultadosFinancieros(true);
@@ -244,7 +245,7 @@ function ejecutarLimpiezaNuevoDia() {
 }
 
 function enlazarEventosInteractivos() {
-    [inputs.kmS, inputs.kmL, inputs.precioL, inputs.cargaP].forEach(entrada => {
+    [inputs.kmS, inputs.kmL, inputs.precioL, inputs.cargaL].forEach(entrada => {
         entrada.addEventListener('input', () => calcularResultadosFinancieros(true));
     });
 
@@ -269,6 +270,7 @@ function enlazarEventosInteractivos() {
     document.getElementById('btnCompartirImg').addEventListener('click', ejecutarProtocoloCompartir);
 }
 
+// CAPTURA LIMPIA EXCLUSIVA PARA ENVIAR POR WHATSAPP
 function ejecutarProtocoloCompartir() {
     const zonaCaptura = document.getElementById('contenedorReporte');
     const botonViaje = document.getElementById('btnAgregarViaje');
@@ -296,7 +298,7 @@ function ejecutarProtocoloCompartir() {
                 enlaceDescarga.download = `Corte_${appData.fecha}.png`;
                 enlaceDescarga.href = URL.createObjectURL(blob);
                 enlaceDescarga.click();
-                alert("Imagen descargada a tus archivos. Abre WhatsApp para enviarla.");
+                alert("Imagen descargada. Abre WhatsApp y envíala desde tu galería.");
             }
         }, 'image/png');
     });

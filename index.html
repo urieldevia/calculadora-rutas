@@ -9,10 +9,10 @@
     
     <title>Corte de Caja Pro</title>
     
-    <link rel="manifest" href="manifest.json?v=1.1">
-    <link rel="stylesheet" href="style.css?v=1.1">
+    <link rel="manifest" href="manifest.json?v=1.2">
+    <link rel="stylesheet" href="style.css?v=1.2">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="app.js?v=1.1" defer></script>
+    <script src="app.js?v=1.2" defer></script>
 </head>
 <body>
     <div class="app-container">
@@ -48,11 +48,11 @@
                         <input type="number" step="0.01" id="precioLitro" value="23.99">
                     </div>
                     <div class="input-group">
-                        <label>Carga ($)</label>
-                        <input type="number" id="cargaPesos" placeholder="Autocalculado">
+                        <label>Litros</label>
+                        <input type="number" step="0.01" id="cargaLitros" placeholder="Autocalculado">
                     </div>
                     <div class="result-row bg-orange">
-                        <span>Gasolina a Descontar</span>
+                        <span>$ Gasolina</span>
                         <span id="gasTotal" class="bold-value">$0.00</span>
                     </div>
                 </section>
